@@ -11,7 +11,7 @@ import java.util.Date;
 
 /**
  * Spring @Value field or method info
- * @author github.com/zhegexiaohuozi [wanghaomiao@huli.com]
+ * @author github.com/zhegexiaohuozi  seimimaster@gmail.com
  * @since 2017/12/20.
  */
 public class SpringValue {
@@ -21,19 +21,21 @@ public class SpringValue {
     private boolean isField = false;
     private String className;
     private String fieldName;
+    private String valKey;
     private Function<String, ?> parser;
     private Logger logger = LoggerFactory.getLogger(SpringValue.class);
 
-    private SpringValue(Object ins, Field field) {
+    private SpringValue(String key,Object ins, Field field) {
         this.bean = ins;
         this.className = ins.getClass().getName();
         this.fieldName = field.getName();
         this.field = field;
         this.isField = true;
         this.parser = findParser(field.getType());
+        this.valKey = key;
     }
 
-    private SpringValue(Object ins, Method method) {
+    private SpringValue(String key,Object ins, Method method) {
         this.bean = ins;
         this.method = method;
         this.className = ins.getClass().getName();
@@ -44,14 +46,15 @@ public class SpringValue {
             return;
         }
         this.parser = findParser(paramTps[0]);
+        this.valKey = key;
     }
 
-    public static SpringValue create(Object ins, Field field){
-        return new SpringValue(ins,field);
+    public static SpringValue create(String key,Object ins, Field field){
+        return new SpringValue(key,ins,field);
     }
 
-    public static SpringValue create(Object ins, Method method){
-        return new SpringValue(ins,method);
+    public static SpringValue create(String key,Object ins, Method method){
+        return new SpringValue(key,ins,method);
     }
 
     public void updateVal(String newVal){
@@ -64,14 +67,14 @@ public class SpringValue {
             }else {
                 Class<?>[] paramTps = method.getParameterTypes();
                 if (paramTps.length != 1){
-                    logger.error("invalid setter ,can not update val={} in {}.{}",newVal,className,fieldName);
+                    logger.error("invalid setter ,can not update key={} val={} in {}.{}",valKey,newVal,className,fieldName);
                     return;
                 }
                 method.invoke(bean,parseVal(newVal));
             }
-            logger.info("auto update apollo changed value, newVal={} in {}.{}",newVal,className,fieldName);
+            logger.info("auto update apollo changed value, key={}, newVal={} in {}.{}",valKey,newVal,className,fieldName);
         }catch (Exception e){
-            logger.error("update field {}.{} filed with new val={},msg ={}",className,fieldName,newVal,e.getMessage());
+            logger.error("update field {}.{} fail with new val={},key = {}, msg = {}",className,fieldName,newVal,valKey,e.getMessage());
         }
     }
 
@@ -98,6 +101,8 @@ public class SpringValue {
             res = Functions.TO_DOUBLE_FUNCTION;
         }else if (targetType.equals(float.class) || targetType.equals(Float.class)){
             res = Functions.TO_FLOAT_FUNCTION;
+        }else if (targetType.equals(byte.class) || targetType.equals(Byte.class)){
+            res = Functions.TO_BYTE_FUNCTION;
         }
         return res;
     }
