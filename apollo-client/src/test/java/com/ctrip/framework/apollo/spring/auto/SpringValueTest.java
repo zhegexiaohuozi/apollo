@@ -14,7 +14,7 @@ import java.util.Date;
 /**
  * SpringValue Tester.
  *
- * @author <wanghaomiao@souyidai.com>
+ * @author github.com/zhegexiaohuozi  seimimaster@gmail.com
  * @version 1.0
  */
 public class SpringValueTest {

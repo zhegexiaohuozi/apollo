@@ -43,7 +43,7 @@ public class SpringValueProcessor implements BeanPostProcessor, PriorityOrdered 
 
     @Override
     public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
-        boolean enabled = Foundation.app().isAutoUpdateEnable();
+        boolean enabled = enable();
         if (enabled){
             Class clazz = bean.getClass();
             processFields(bean, findAllField(clazz));
