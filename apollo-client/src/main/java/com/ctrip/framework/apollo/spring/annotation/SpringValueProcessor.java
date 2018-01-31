@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
  * @since 2017/12/20.
  */
 public class SpringValueProcessor implements BeanPostProcessor, PriorityOrdered {
-    private Pattern pattern = Pattern.compile("\\$\\{(.*)\\}:?(.*)");
+    private Pattern pattern = Pattern.compile("\\$\\{([^:]*)\\}:?(.*)");
     private static Multimap<String, SpringValue> monitor = LinkedListMultimap.create();
     private static ApplicationProvider applicationProvider = Foundation.app();
     private Logger logger = LoggerFactory.getLogger(SpringValueProcessor.class);

@@ -10,6 +10,8 @@ import org.junit.Test;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Date;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * SpringValue Tester.
@@ -21,6 +23,8 @@ public class SpringValueTest {
 
     private SpringValue defaultVal;
     private ConfigChange testTarget;
+    //SpringValueProcessor.pattern
+    private Pattern pattern = Pattern.compile("\\$\\{([^:]*)\\}:?(.*)");
 
     @Before
     public void before() throws Exception {
@@ -64,6 +68,16 @@ public class SpringValueTest {
         Assert.assertEquals(Functions.TO_SHORT_FUNCTION,findParser.invoke(defaultVal,Short.class));
         Assert.assertEquals(Functions.TO_DATE_FUNCTION,findParser.invoke(defaultVal,Date.class));
 
+    }
+
+    @Test
+    public void testPattern(){
+        String valP = "${some.timeout:5000}";
+        Matcher matcher = pattern.matcher(valP);
+        if (matcher.matches()) {
+            String key = matcher.group(1);
+            Assert.assertEquals("some.timeout",key);
+        }
     }
 
 } 
