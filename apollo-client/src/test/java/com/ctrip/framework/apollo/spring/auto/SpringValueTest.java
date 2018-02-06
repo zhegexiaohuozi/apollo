@@ -31,7 +31,7 @@ public class SpringValueTest {
         Field field = ConfigChange.class.getDeclaredField("newValue");
         field.setAccessible(true);
         testTarget = new ConfigChange("test","test","testO","testN", PropertyChangeType.MODIFIED);
-        defaultVal = SpringValue.create("test",testTarget,field);
+        defaultVal = SpringFieldValue.create("test",testTarget,field);
     }
 
     /**

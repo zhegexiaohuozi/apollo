@@ -1,12 +1,9 @@
 package com.ctrip.framework.apollo.spring.config;
 
 import com.ctrip.framework.apollo.ConfigChangeListener;
-import com.ctrip.framework.apollo.model.ConfigChange;
-import com.ctrip.framework.apollo.model.ConfigChangeEvent;
-import com.ctrip.framework.apollo.spring.annotation.SpringValueProcessor;
-import com.ctrip.framework.apollo.spring.auto.SpringValue;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableSortedSet;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 
 import com.ctrip.framework.apollo.Config;
@@ -21,11 +18,10 @@ import org.springframework.core.PriorityOrdered;
 import org.springframework.core.env.CompositePropertySource;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.Environment;
-import org.springframework.util.CollectionUtils;
 
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.Set;
+import java.util.List;
 
 /**
  * Apollo Property Sources processor for Spring Annotation Based Application. <br /> <br />
@@ -39,11 +35,18 @@ import java.util.Set;
  */
 public class PropertySourcesProcessor implements BeanFactoryPostProcessor, EnvironmentAware, PriorityOrdered {
   private static final Multimap<Integer, String> NAMESPACE_NAMES = HashMultimap.create();
+  private static final List<Config> ALL_CONFIG = Lists.newLinkedList();
 
   private ConfigurableEnvironment environment;
 
   public static boolean addNamespaces(Collection<String> namespaces, int order) {
     return NAMESPACE_NAMES.putAll(order, namespaces);
+  }
+
+  public static void registerListener(ConfigChangeListener configChangeListener){
+    for(Config config:ALL_CONFIG){
+      config.addChangeListener(configChangeListener);
+    }
   }
 
   @Override
@@ -66,28 +69,7 @@ public class PropertySourcesProcessor implements BeanFactoryPostProcessor, Envir
       int order = iterator.next();
       for (String namespace : NAMESPACE_NAMES.get(order)) {
         Config config = ConfigService.getConfig(namespace);
-        config.addChangeListener(new ConfigChangeListener() {
-          @Override
-          public void onChange(ConfigChangeEvent changeEvent) {
-            Set<String> keys = changeEvent.changedKeys();
-            if (CollectionUtils.isEmpty(keys)){
-              return;
-            }
-            if (!SpringValueProcessor.enable()){
-              return;
-            }
-            for (String k:keys){
-              ConfigChange configChange = changeEvent.getChange(k);
-              Collection<SpringValue> targetValues = SpringValueProcessor.monitor().get(k);
-              if (targetValues==null||targetValues.isEmpty()){
-                continue;
-              }
-              for (SpringValue val:targetValues){
-                val.updateVal(configChange.getNewValue());
-              }
-            }
-          }
-        });
+        ALL_CONFIG.add(config);
         composite.addPropertySource(new ConfigPropertySource(namespace, config));
       }
     }

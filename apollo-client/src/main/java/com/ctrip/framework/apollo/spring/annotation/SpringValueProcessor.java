@@ -1,6 +1,12 @@
 package com.ctrip.framework.apollo.spring.annotation;
 
+import com.ctrip.framework.apollo.ConfigChangeListener;
+import com.ctrip.framework.apollo.model.ConfigChange;
+import com.ctrip.framework.apollo.model.ConfigChangeEvent;
+import com.ctrip.framework.apollo.spring.auto.SpringFieldValue;
+import com.ctrip.framework.apollo.spring.auto.SpringMethodValue;
 import com.ctrip.framework.apollo.spring.auto.SpringValue;
+import com.ctrip.framework.apollo.spring.config.PropertySourcesProcessor;
 import com.ctrip.framework.foundation.Foundation;
 import com.ctrip.framework.foundation.spi.provider.ApplicationProvider;
 import com.google.common.collect.LinkedListMultimap;
@@ -10,14 +16,20 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.context.EnvironmentAware;
 import org.springframework.core.Ordered;
 import org.springframework.core.PriorityOrdered;
+import org.springframework.core.env.Environment;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.ReflectionUtils;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -27,10 +39,11 @@ import java.util.regex.Pattern;
  * @author github.com/zhegexiaohuozi  seimimaster@gmail.com
  * @since 2017/12/20.
  */
-public class SpringValueProcessor implements BeanPostProcessor, PriorityOrdered {
+public class SpringValueProcessor implements BeanPostProcessor, PriorityOrdered, EnvironmentAware {
     private Pattern pattern = Pattern.compile("\\$\\{([^:]*)\\}:?(.*)");
     private static Multimap<String, SpringValue> monitor = LinkedListMultimap.create();
     private static ApplicationProvider applicationProvider = Foundation.app();
+    private Environment environment;
     private Logger logger = LoggerFactory.getLogger(SpringValueProcessor.class);
 
     public static Multimap<String, SpringValue> monitor() {
@@ -67,7 +80,7 @@ public class SpringValueProcessor implements BeanPostProcessor, PriorityOrdered 
             Matcher matcher = pattern.matcher(value.value());
             if (matcher.matches()) {
                 String key = matcher.group(1);
-                monitor.put(key, SpringValue.create(key,bean, field));
+                monitor.put(key, SpringFieldValue.create(key,bean, field));
                 logger.info("Listening apollo key = {}", key);
             }
         }
@@ -83,7 +96,7 @@ public class SpringValueProcessor implements BeanPostProcessor, PriorityOrdered 
             Matcher matcher = pattern.matcher(value.value());
             if (matcher.matches()) {
                 String key = matcher.group(1);
-                monitor.put(key, SpringValue.create(key,bean, method));
+                monitor.put(key, SpringMethodValue.create(key,bean, method));
                 logger.info("Listening apollo key = {}", key);
             }
         }
@@ -116,5 +129,35 @@ public class SpringValueProcessor implements BeanPostProcessor, PriorityOrdered 
             }
         });
         return res;
+    }
+
+    @Override
+    public void setEnvironment(Environment env) {
+        this.environment = env;
+        PropertySourcesProcessor.registerListener(new ConfigChangeListener() {
+            @Override
+            public void onChange(ConfigChangeEvent changeEvent) {
+                Set<String> keys = changeEvent.changedKeys();
+                if (CollectionUtils.isEmpty(keys)) {
+                    return;
+                }
+                if (!SpringValueProcessor.enable()) {
+                    return;
+                }
+                for (String k : keys) {
+                    ConfigChange configChange = changeEvent.getChange(k);
+                    if (!Objects.equals(environment.getProperty(k), configChange.getNewValue())) {
+                        continue;
+                    }
+                    Collection<SpringValue> targetValues = SpringValueProcessor.monitor().get(k);
+                    if (targetValues == null || targetValues.isEmpty()) {
+                        continue;
+                    }
+                    for (SpringValue val : targetValues) {
+                        val.updateVal(environment.getProperty(k));
+                    }
+                }
+            }
+        });
     }
 }
