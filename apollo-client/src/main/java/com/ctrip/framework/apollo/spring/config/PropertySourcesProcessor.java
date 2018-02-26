@@ -1,9 +1,8 @@
 package com.ctrip.framework.apollo.spring.config;
 
-import com.ctrip.framework.apollo.ConfigChangeListener;
-import com.google.common.collect.HashMultimap;
+import com.ctrip.framework.apollo.build.ApolloInjector;
 import com.google.common.collect.ImmutableSortedSet;
-import com.google.common.collect.Lists;
+import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
 
 import com.ctrip.framework.apollo.Config;
@@ -21,7 +20,6 @@ import org.springframework.core.env.Environment;
 
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.List;
 
 /**
  * Apollo Property Sources processor for Spring Annotation Based Application. <br /> <br />
@@ -34,19 +32,14 @@ import java.util.List;
  * @author Jason Song(song_s@ctrip.com)
  */
 public class PropertySourcesProcessor implements BeanFactoryPostProcessor, EnvironmentAware, PriorityOrdered {
-  private static final Multimap<Integer, String> NAMESPACE_NAMES = HashMultimap.create();
-  private static final List<Config> ALL_CONFIG = Lists.newLinkedList();
+  private static final Multimap<Integer, String> NAMESPACE_NAMES = LinkedHashMultimap.create();
 
+  private final ConfigPropertySourceFactory configPropertySourceFactory = ApolloInjector
+      .getInstance(ConfigPropertySourceFactory.class);
   private ConfigurableEnvironment environment;
 
   public static boolean addNamespaces(Collection<String> namespaces, int order) {
     return NAMESPACE_NAMES.putAll(order, namespaces);
-  }
-
-  public static void registerListener(ConfigChangeListener configChangeListener){
-    for(Config config:ALL_CONFIG){
-      config.addChangeListener(configChangeListener);
-    }
   }
 
   @Override
@@ -69,8 +62,8 @@ public class PropertySourcesProcessor implements BeanFactoryPostProcessor, Envir
       int order = iterator.next();
       for (String namespace : NAMESPACE_NAMES.get(order)) {
         Config config = ConfigService.getConfig(namespace);
-        ALL_CONFIG.add(config);
-        composite.addPropertySource(new ConfigPropertySource(namespace, config));
+
+        composite.addPropertySource(configPropertySourceFactory.getConfigPropertySource(namespace, config));
       }
     }
 
