@@ -6,16 +6,13 @@ import com.ctrip.framework.apollo.build.ApolloInjector;
 import com.ctrip.framework.apollo.core.ConfigConsts;
 import com.ctrip.framework.apollo.spring.config.ConfigPropertySourceFactory;
 import com.ctrip.framework.apollo.spring.config.PropertySourcesConstants;
-import com.ctrip.framework.apollo.spring.config.ConfigPropertySource;
+import com.ctrip.framework.apollo.spring.util.SpringInjector;
 import com.google.common.base.Splitter;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.SpringApplicationRunListener;
+import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.core.Ordered;
-import org.springframework.core.PriorityOrdered;
 import org.springframework.core.env.CompositePropertySource;
 import org.springframework.core.env.ConfigurableEnvironment;
 
@@ -36,28 +33,16 @@ import org.springframework.core.env.ConfigurableEnvironment;
  *   apollo.bootstrap.namespaces = application,FX.apollo
  * </pre>
  */
-public class ApolloSpringApplicationRunListener implements SpringApplicationRunListener,
-    PriorityOrdered {
-  private static final Logger logger = LoggerFactory.getLogger(ApolloSpringApplicationRunListener.class);
+public class ApolloApplicationContextInitializer implements
+    ApplicationContextInitializer<ConfigurableApplicationContext> {
+  private static final Logger logger = LoggerFactory.getLogger(ApolloApplicationContextInitializer.class);
   private static final Splitter NAMESPACE_SPLITTER = Splitter.on(",").omitEmptyStrings().trimResults();
 
-  private final ConfigPropertySourceFactory configPropertySourceFactory = ApolloInjector
+  private final ConfigPropertySourceFactory configPropertySourceFactory = SpringInjector
       .getInstance(ConfigPropertySourceFactory.class);
 
-  public ApolloSpringApplicationRunListener(SpringApplication application, String[] args) {
-    //ignore
-  }
-
-  public void starting() {
-  }
-
-  public void started() {
-  }
-
-  public void environmentPrepared(ConfigurableEnvironment environment) {
-  }
-
-  public void contextPrepared(ConfigurableApplicationContext context) {
+  @Override
+  public void initialize(ConfigurableApplicationContext context) {
     ConfigurableEnvironment environment = context.getEnvironment();
     String enabled = environment.getProperty(PropertySourcesConstants.APOLLO_BOOTSTRAP_ENABLED, "false");
     if (!Boolean.valueOf(enabled)) {
@@ -83,16 +68,5 @@ public class ApolloSpringApplicationRunListener implements SpringApplicationRunL
     }
 
     environment.getPropertySources().addFirst(composite);
-  }
-
-  public void contextLoaded(ConfigurableApplicationContext context) {
-  }
-
-  public void finished(ConfigurableApplicationContext configurableApplicationContext,
-      Throwable throwable) {
-  }
-
-  public int getOrder() {
-    return Ordered.LOWEST_PRECEDENCE;
   }
 }
