@@ -1,11 +1,9 @@
 package com.ctrip.framework.apollo.spring.property;
 
 import com.ctrip.framework.apollo.ConfigChangeListener;
-import com.ctrip.framework.apollo.build.ApolloInjector;
 import com.ctrip.framework.apollo.enums.PropertyChangeType;
 import com.ctrip.framework.apollo.model.ConfigChange;
 import com.ctrip.framework.apollo.model.ConfigChangeEvent;
-import com.ctrip.framework.apollo.spring.annotation.SpringValueProcessor;
 import com.ctrip.framework.apollo.spring.util.SpringInjector;
 import com.google.gson.Gson;
 import java.lang.reflect.Field;
