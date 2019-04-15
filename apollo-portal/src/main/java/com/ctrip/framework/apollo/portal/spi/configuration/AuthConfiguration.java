@@ -1,6 +1,7 @@
 package com.ctrip.framework.apollo.portal.spi.configuration;
 
 import com.ctrip.framework.apollo.common.condition.ConditionalOnMissingProfile;
+import com.ctrip.framework.apollo.core.utils.StringUtils;
 import com.ctrip.framework.apollo.portal.component.config.PortalConfig;
 import com.ctrip.framework.apollo.portal.spi.LogoutHandler;
 import com.ctrip.framework.apollo.portal.spi.SsoHeartbeatHandler;
@@ -14,16 +15,11 @@ import com.ctrip.framework.apollo.portal.spi.defaultimpl.DefaultLogoutHandler;
 import com.ctrip.framework.apollo.portal.spi.defaultimpl.DefaultSsoHeartbeatHandler;
 import com.ctrip.framework.apollo.portal.spi.defaultimpl.DefaultUserInfoHolder;
 import com.ctrip.framework.apollo.portal.spi.defaultimpl.DefaultUserService;
+import com.ctrip.framework.apollo.portal.spi.ldap.FilterLdapByGroupUserSearch;
 import com.ctrip.framework.apollo.portal.spi.ldap.LdapUserService;
 import com.ctrip.framework.apollo.portal.spi.springsecurity.SpringSecurityUserInfoHolder;
 import com.ctrip.framework.apollo.portal.spi.springsecurity.SpringSecurityUserService;
 import com.google.common.collect.Maps;
-import java.util.Collections;
-import java.util.EventListener;
-import java.util.Map;
-import javax.servlet.Filter;
-import javax.sql.DataSource;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -43,11 +39,19 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.LdapShaPasswordEncoder;
+import org.springframework.security.ldap.authentication.BindAuthenticator;
+import org.springframework.security.ldap.authentication.LdapAuthenticationProvider;
+import org.springframework.security.ldap.search.FilterBasedLdapUserSearch;
+import org.springframework.security.ldap.userdetails.DefaultLdapAuthoritiesPopulator;
 import org.springframework.security.provisioning.JdbcUserDetailsManager;
 import org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint;
 import org.springframework.security.web.authentication.logout.SimpleUrlLogoutSuccessHandler;
 
+import javax.servlet.Filter;
+import javax.sql.DataSource;
+import java.util.Collections;
+import java.util.EventListener;
+import java.util.Map;
 
 @Configuration
 public class AuthConfiguration {
@@ -59,8 +63,11 @@ public class AuthConfiguration {
   @Profile("ctrip")
   static class CtripAuthAutoConfiguration {
 
-    @Autowired
-    private PortalConfig portalConfig;
+    private final PortalConfig portalConfig;
+
+    public CtripAuthAutoConfiguration(final PortalConfig portalConfig) {
+      this.portalConfig = portalConfig;
+    }
 
     @Bean
     public ServletListenerRegistrationBean redisAppSettingListner() {
@@ -128,9 +135,7 @@ public class AuthConfiguration {
       casValidationFilter.setOrder(3);
 
       return casValidationFilter;
-
     }
-
 
     @Bean
     public FilterRegistrationBean assertionHolder() {
@@ -168,7 +173,6 @@ public class AuthConfiguration {
       } catch (Exception e) {
         throw new RuntimeException("instance filter fail", e);
       }
-
     }
 
     private EventListener listener(String className) {
@@ -191,9 +195,7 @@ public class AuthConfiguration {
     public SsoHeartbeatHandler ctripSsoHeartbeatHandler() {
       return new CtripSsoHeartbeatHandler();
     }
-
   }
-
 
   /**
    * spring.profiles.active = auth
@@ -234,14 +236,14 @@ public class AuthConfiguration {
       jdbcUserDetailsManager
           .setCreateUserSql("insert into `Users` (Username, Password, Enabled) values (?,?,?)");
       jdbcUserDetailsManager
-          .setUpdateUserSql("update `Users` set Password = ?, Enabled = ? where Username = ?");
-      jdbcUserDetailsManager.setDeleteUserSql("delete from `Users` where Username = ?");
+          .setUpdateUserSql("update `Users` set Password = ?, Enabled = ? where id = (select u.id from (select id from `Users` where Username = ?) as u)");
+      jdbcUserDetailsManager.setDeleteUserSql("delete from `Users` where id = (select u.id from (select id from `Users` where Username = ?) as u)");
       jdbcUserDetailsManager
           .setCreateAuthoritySql("insert into `Authorities` (Username, Authority) values (?,?)");
       jdbcUserDetailsManager
-          .setDeleteUserAuthoritiesSql("delete from `Authorities` where Username = ?");
+          .setDeleteUserAuthoritiesSql("delete from `Authorities` where id = (select u.id from (select id from `Users` where Username = ?) as u)");
       jdbcUserDetailsManager
-          .setChangePasswordSql("update `Users` set Password = ? where Username = ?");
+          .setChangePasswordSql("update `Users` set Password = ? where id = (select u.id from (select id from `Users` where Username = ?) as u)");
 
       return jdbcUserDetailsManager;
     }
@@ -285,12 +287,16 @@ public class AuthConfiguration {
    */
   @Configuration
   @Profile("ldap")
-  @EnableConfigurationProperties(LdapProperties.class)
+  @EnableConfigurationProperties({LdapProperties.class,LdapExtendProperties.class})
   static class SpringSecurityLDAPAuthAutoConfiguration {
-    @Autowired
-    private LdapProperties properties;
-    @Autowired
-    private Environment environment;
+
+    private final LdapProperties properties;
+    private final Environment environment;
+
+    public SpringSecurityLDAPAuthAutoConfiguration(final LdapProperties properties, final Environment environment) {
+      this.properties = properties;
+      this.environment = environment;
+    }
 
     @Bean
     @ConditionalOnMissingBean(SsoHeartbeatHandler.class)
@@ -333,9 +339,10 @@ public class AuthConfiguration {
     @Bean
     @ConditionalOnMissingBean(LdapOperations.class)
     public LdapTemplate ldapTemplate(ContextSource contextSource) {
-      return new LdapTemplate(contextSource);
+      LdapTemplate ldapTemplate = new LdapTemplate(contextSource);
+      ldapTemplate.setIgnorePartialResultException(true);
+      return ldapTemplate;
     }
-
   }
 
   @Order(99)
@@ -345,10 +352,50 @@ public class AuthConfiguration {
   @EnableGlobalMethodSecurity(prePostEnabled = true)
   static class SpringSecurityLDAPConfigurer extends WebSecurityConfigurerAdapter {
 
-    @Autowired
-    private LdapProperties ldapProperties;
-    @Autowired
-    private LdapContextSource ldapContextSource;
+    private final LdapProperties ldapProperties;
+    private final LdapContextSource ldapContextSource;
+
+    private final LdapExtendProperties ldapExtendProperties;
+
+    public SpringSecurityLDAPConfigurer(final LdapProperties ldapProperties,
+        final LdapContextSource ldapContextSource,
+       final LdapExtendProperties ldapExtendProperties) {
+      this.ldapProperties = ldapProperties;
+      this.ldapContextSource = ldapContextSource;
+      this.ldapExtendProperties = ldapExtendProperties;
+    }
+
+    @Bean
+    public FilterBasedLdapUserSearch userSearch() {
+      if (ldapExtendProperties.getGroup() == null || StringUtils
+          .isBlank(ldapExtendProperties.getGroup().getGroupSearch())) {
+        FilterBasedLdapUserSearch filterBasedLdapUserSearch = new FilterBasedLdapUserSearch("",
+            ldapProperties.getSearchFilter(), ldapContextSource);
+        filterBasedLdapUserSearch.setSearchSubtree(true);
+        return filterBasedLdapUserSearch;
+      } else {
+        FilterLdapByGroupUserSearch filterLdapByGroupUserSearch = new FilterLdapByGroupUserSearch(
+            ldapProperties.getBase(), ldapProperties.getSearchFilter(), ldapExtendProperties.getGroup().getGroupBase(),
+            ldapContextSource, ldapExtendProperties.getGroup().getGroupSearch(),
+            ldapExtendProperties.getMapping().getRdnKey(),
+            ldapExtendProperties.getGroup().getGroupMembership(),ldapExtendProperties.getMapping().getLoginId());
+        filterLdapByGroupUserSearch.setSearchSubtree(true);
+        return filterLdapByGroupUserSearch;
+      }
+    }
+
+    @Bean
+    public LdapAuthenticationProvider ldapAuthProvider() {
+      BindAuthenticator bindAuthenticator = new BindAuthenticator(ldapContextSource);
+      bindAuthenticator.setUserSearch(userSearch());
+      DefaultLdapAuthoritiesPopulator defaultAuthAutoConfiguration = new DefaultLdapAuthoritiesPopulator(
+          ldapContextSource, null);
+      defaultAuthAutoConfiguration.setIgnorePartialResultException(true);
+      defaultAuthAutoConfiguration.setSearchSubtree(true);
+      LdapAuthenticationProvider ldapAuthenticationProvider = new LdapAuthenticationProvider(
+          bindAuthenticator, defaultAuthAutoConfiguration);
+      return ldapAuthenticationProvider;
+    }
 
     @Override
     protected void configure(HttpSecurity http) throws Exception {
@@ -367,12 +414,7 @@ public class AuthConfiguration {
 
     @Override
     protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-      auth.ldapAuthentication()
-          .userDnPatterns(ldapProperties.getUserDnPatterns())
-          .contextSource(ldapContextSource)
-          .passwordCompare()
-          .passwordEncoder(new LdapShaPasswordEncoder())
-          .passwordAttribute("userPassword");
+      auth.authenticationProvider(ldapAuthProvider());
     }
   }
 

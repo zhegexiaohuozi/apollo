@@ -4,7 +4,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.core.env.Environment;
 import org.springframework.util.Assert;
 import org.springframework.util.ObjectUtils;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,11 +43,14 @@ public class LdapProperties {
   private boolean anonymousReadOnly;
 
   /**
+   * User search filter
+   */
+  private String searchFilter;
+
+  /**
    * LDAP specification settings.
    */
   private final Map<String, String> baseEnvironment = new HashMap<>();
-
-  private String userDnPatterns;
 
   public String[] getUrls() {
     return this.urls;
@@ -90,12 +92,12 @@ public class LdapProperties {
     this.anonymousReadOnly = anonymousReadOnly;
   }
 
-  public String getUserDnPatterns() {
-    return userDnPatterns;
+  public String getSearchFilter() {
+    return searchFilter;
   }
 
-  public void setUserDnPatterns(String userDnPatterns) {
-    this.userDnPatterns = userDnPatterns;
+  public void setSearchFilter(String searchFilter) {
+    this.searchFilter = searchFilter;
   }
 
   public Map<String, String> getBaseEnvironment() {

@@ -16,6 +16,8 @@ public interface AppNamespaceRepository extends PagingAndSortingRepository<AppNa
 
   List<AppNamespace> findByIsPublicTrue();
 
+  List<AppNamespace> findByAppId(String appId);
+
   @Modifying
   @Query("UPDATE AppNamespace SET IsDeleted=1,DataChange_LastModifiedBy=?2 WHERE AppId=?1")
   int batchDeleteByAppId(String appId, String operator);

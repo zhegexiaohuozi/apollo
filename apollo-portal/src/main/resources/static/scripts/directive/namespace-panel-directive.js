@@ -21,7 +21,9 @@ function directive($window, toastr, AppUtil, EventManager, PermissionService, Na
             showNoModifyPermissionDialog: '=',
             preCreateBranch: '=',
             preDeleteBranch: '=',
-            showMergeAndPublishGrayTips: '='
+            showMergeAndPublishGrayTips: '=',
+            showBody: "=?",
+            lazyLoad: "=?"
         },
         link: function (scope) {
 
@@ -42,13 +44,16 @@ function directive($window, toastr, AppUtil, EventManager, PermissionService, Na
 
             var operate_branch_storage_key = 'OperateBranch';
 
+            scope.refreshNamespace = refreshNamespace;
             scope.switchView = switchView;
             scope.toggleItemSearchInput = toggleItemSearchInput;
             scope.searchItems = searchItems;
             scope.loadCommitHistory = loadCommitHistory;
             scope.toggleTextEditStatus = toggleTextEditStatus;
             scope.goToSyncPage = goToSyncPage;
+            scope.goToDiffPage = goToDiffPage;
             scope.modifyByText = modifyByText;
+            scope.syntaxCheck = syntaxCheck;
             scope.goToParentAppConfigPage = goToParentAppConfigPage;
             scope.switchInstanceViewType = switchInstanceViewType;
             scope.switchBranch = switchBranch;
@@ -74,25 +79,45 @@ function directive($window, toastr, AppUtil, EventManager, PermissionService, Na
                                          subscriberId, scope.namespace.baseInfo.namespaceName);
             });
 
-            init();
+            preInit(scope.namespace);
+
+            if (!scope.lazyLoad || scope.namespace.initialized) {
+                init();
+            }
+
+            function preInit(namespace) {
+                scope.showNamespaceBody = false;
+                namespace.isLinkedNamespace =
+                    namespace.isPublic ? namespace.parentAppId != namespace.baseInfo.appId : false;
+                //namespace view name hide suffix
+                namespace.viewName = namespace.baseInfo.namespaceName.replace(".xml", "").replace(
+                            ".properties", "").replace(".json", "").replace(".yml", "")
+                            .replace(".yaml", "");
+            }
 
             function init() {
                 initNamespace(scope.namespace);
                 initOther();
+                scope.namespace.initialized = true;
+            }
+
+            function refreshNamespace() {
+                EventManager.emit(EventManager.EventType.REFRESH_NAMESPACE,
+                                  {namespace: scope.namespace});
             }
 
             function initNamespace(namespace, viewType) {
                 namespace.hasBranch = false;
                 namespace.isBranch = false;
-                namespace.isLinkedNamespace =
-                    namespace.isPublic ? namespace.parentAppId != namespace.baseInfo.appId : false;
                 namespace.displayControl = {
                     currentOperateBranch: 'master',
                     showSearchInput: false,
-                    show: true
+                    show: scope.showBody
                 };
+                scope.showNamespaceBody = namespace.showNamespaceBody ? true : scope.showBody;
                 namespace.viewItems = namespace.items;
                 namespace.isPropertiesFormat = namespace.format == 'properties';
+                namespace.isSyntaxCheckable = namespace.format == 'yaml' || namespace.format == 'yml';
                 namespace.isTextEditing = false;
                 namespace.instanceViewType = namespace_instance_view_type.LATEST_RELEASE;
                 namespace.latestReleaseInstancesPage = 0;
@@ -307,12 +332,6 @@ function directive($window, toastr, AppUtil, EventManager, PermissionService, Na
                 }
 
                 function initNamespaceViewName(namespace) {
-                    //namespace view name hide suffix
-                    namespace.viewName =
-                        namespace.baseInfo.namespaceName.replace(".xml", "").replace(
-                            ".properties", "").replace(".json", "").replace(".yml", "")
-                            .replace(".yaml", "");
-
                     if (!viewType) {
                         if (namespace.isPropertiesFormat) {
                             switchView(namespace, namespace_view_type.TABLE);
@@ -348,7 +367,7 @@ function directive($window, toastr, AppUtil, EventManager, PermissionService, Na
 
                     localStorage.setItem(operate_branch_storage_key, JSON.stringify(operateBranchStorage));
 
-                    switchBranch(operateBranchStorage[namespaceId]);
+                    switchBranch(operateBranchStorage[namespaceId], false);
 
                 }
 
@@ -378,13 +397,14 @@ function directive($window, toastr, AppUtil, EventManager, PermissionService, Na
                     });
             }
 
-            function switchBranch(branchName) {
+            function switchBranch(branchName, forceShowBody) {
                 if (branchName != 'master') {
-                    scope.namespace.branch.displayControl.show = true;
                     initRules(scope.namespace.branch);
-                } else {
-                    scope.namespace.displayControl.show = true;
                 }
+                if (forceShowBody) {
+                    scope.showNamespaceBody = true;
+                }
+
                 scope.namespace.displayControl.currentOperateBranch = branchName;
 
                 //save to local storage
@@ -682,6 +702,14 @@ function directive($window, toastr, AppUtil, EventManager, PermissionService, Na
                     + "&namespaceName=" + namespace.baseInfo.namespaceName;
             }
 
+            function goToDiffPage(namespace) {
+                $window.location.href =
+                    "config/diff.html?#/appid=" + scope.appId + "&env="
+                    + scope.env + "&clusterName="
+                    + scope.cluster
+                    + "&namespaceName=" + namespace.baseInfo.namespaceName;
+            }
+
             function modifyByText(namespace) {
                 var model = {
                     configText: namespace.editText,
@@ -716,6 +744,28 @@ function directive($window, toastr, AppUtil, EventManager, PermissionService, Na
                 );
                 namespace.commited = true;
                 toggleTextEditStatus(namespace);
+            }
+
+            function syntaxCheck(namespace) {
+                var model = {
+                    configText: namespace.editText,
+                    namespaceId: namespace.baseInfo.id,
+                    format: namespace.format
+                };
+                ConfigService.syntax_check_text(scope.appId,
+                                                scope.env,
+                                                scope.cluster,
+                                                namespace.baseInfo.namespaceName,
+                                                model).then(
+                    function (result) {
+                        toastr.success("语法正确！");
+
+                    }, function (result) {
+                        EventManager.emit(EventManager.EventType.SYNTAX_CHECK_TEXT_FAILED, {
+                            syntaxCheckMessage: AppUtil.pureErrorMsg(result)
+                        });
+                    }
+                );
             }
 
             function goToParentAppConfigPage(namespace) {

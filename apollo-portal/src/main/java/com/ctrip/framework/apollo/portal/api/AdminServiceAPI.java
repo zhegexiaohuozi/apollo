@@ -105,6 +105,17 @@ public class AdminServiceAPI {
           .post(env, "apps/{appId}/appnamespaces", appNamespace, AppNamespaceDTO.class, appNamespace.getAppId());
     }
 
+    public AppNamespaceDTO createMissingAppNamespace(Env env, AppNamespaceDTO appNamespace) {
+      return restTemplate
+          .post(env, "apps/{appId}/appnamespaces?silentCreation=true", appNamespace, AppNamespaceDTO.class,
+              appNamespace.getAppId());
+    }
+
+    public List<AppNamespaceDTO> getAppNamespaces(String appId, Env env) {
+      AppNamespaceDTO[] appNamespaceDTOs = restTemplate.get(env, "apps/{appId}/appnamespaces", AppNamespaceDTO[].class, appId);
+      return Arrays.asList(appNamespaceDTOs);
+    }
+
     public void deleteNamespace(Env env, String appId, String clusterName, String namespaceName, String operator) {
       restTemplate
           .delete(env, "apps/{appId}/clusters/{clusterName}/namespaces/{namespaceName}?operator={operator}", appId,
@@ -284,9 +295,7 @@ public class AdminServiceAPI {
       parameters.add("comment", releaseComment);
       parameters.add("operator", operator);
       parameters.add("isEmergencyPublish", String.valueOf(isEmergencyPublish));
-      grayDelKeys.forEach(key ->{
-        parameters.add("grayDelKeys",key);
-      });
+      grayDelKeys.forEach(key -> parameters.add("grayDelKeys",key));
       HttpEntity<MultiValueMap<String, String>> entity =
               new HttpEntity<>(parameters, headers);
       ReleaseDTO response = restTemplate.post(

@@ -1,6 +1,7 @@
 package com.ctrip.framework.apollo.openapi.client.service;
 
 import com.ctrip.framework.apollo.core.ConfigConsts;
+import com.ctrip.framework.apollo.openapi.client.exception.ApolloOpenApiException;
 import com.ctrip.framework.apollo.openapi.dto.OpenItemDTO;
 import com.google.common.base.Strings;
 import com.google.gson.Gson;
@@ -14,6 +15,34 @@ public class ItemOpenApiService extends AbstractOpenApiService {
     super(client, baseUrl, gson);
   }
 
+  public OpenItemDTO getItem(String appId, String env, String clusterName, String namespaceName, String key) {
+    if (Strings.isNullOrEmpty(clusterName)) {
+      clusterName = ConfigConsts.CLUSTER_NAME_DEFAULT;
+    }
+    if (Strings.isNullOrEmpty(namespaceName)) {
+      namespaceName = ConfigConsts.NAMESPACE_APPLICATION;
+    }
+
+    checkNotEmpty(appId, "App id");
+    checkNotEmpty(env, "Env");
+    checkNotEmpty(key, "Item key");
+
+    String path = String.format("envs/%s/apps/%s/clusters/%s/namespaces/%s/items/%s",
+        escapePath(env), escapePath(appId), escapePath(clusterName), escapePath(namespaceName), escapePath(key));
+
+    try (CloseableHttpResponse response = get(path)) {
+      return gson.fromJson(EntityUtils.toString(response.getEntity()), OpenItemDTO.class);
+    } catch (Throwable ex) {
+      // return null if item doesn't exist
+      if (ex instanceof ApolloOpenApiException && ((ApolloOpenApiException)ex).getStatus() == 404) {
+        return null;
+      }
+      throw new RuntimeException(String
+          .format("Get item: %s for appId: %s, cluster: %s, namespace: %s in env: %s failed", key, appId, clusterName,
+              namespaceName, env), ex);
+    }
+  }
+
   public OpenItemDTO createItem(String appId, String env, String clusterName, String namespaceName, OpenItemDTO itemDTO) {
     if (Strings.isNullOrEmpty(clusterName)) {
       clusterName = ConfigConsts.CLUSTER_NAME_DEFAULT;
@@ -25,7 +54,6 @@ public class ItemOpenApiService extends AbstractOpenApiService {
     checkNotEmpty(appId, "App id");
     checkNotEmpty(env, "Env");
     checkNotEmpty(itemDTO.getKey(), "Item key");
-    checkNotEmpty(itemDTO.getValue(), "Item value");
     checkNotEmpty(itemDTO.getDataChangeCreatedBy(), "Item created by");
 
     String path = String.format("envs/%s/apps/%s/clusters/%s/namespaces/%s/items",
@@ -51,7 +79,6 @@ public class ItemOpenApiService extends AbstractOpenApiService {
     checkNotEmpty(appId, "App id");
     checkNotEmpty(env, "Env");
     checkNotEmpty(itemDTO.getKey(), "Item key");
-    checkNotEmpty(itemDTO.getValue(), "Item value");
     checkNotEmpty(itemDTO.getDataChangeLastModifiedBy(), "Item modified by");
 
     String path = String.format("envs/%s/apps/%s/clusters/%s/namespaces/%s/items/%s",
@@ -77,7 +104,6 @@ public class ItemOpenApiService extends AbstractOpenApiService {
     checkNotEmpty(appId, "App id");
     checkNotEmpty(env, "Env");
     checkNotEmpty(itemDTO.getKey(), "Item key");
-    checkNotEmpty(itemDTO.getValue(), "Item value");
     checkNotEmpty(itemDTO.getDataChangeCreatedBy(), "Item created by");
 
     if (Strings.isNullOrEmpty(itemDTO.getDataChangeLastModifiedBy())) {

@@ -1,12 +1,14 @@
 package com.ctrip.framework.apollo.openapi.client.service;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.ctrip.framework.apollo.openapi.dto.OpenItemDTO;
 import org.apache.http.client.methods.HttpDelete;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
 import org.apache.http.entity.ContentType;
@@ -38,6 +40,32 @@ public class ItemOpenApiServiceTest extends AbstractOpenApiServiceTest {
     when(someHttpResponse.getEntity()).thenReturn(responseEntity);
 
     itemOpenApiService = new ItemOpenApiService(httpClient, someBaseUrl, gson);
+  }
+
+  @Test
+  public void testGetItem() throws Exception {
+    String someKey = "someKey";
+
+    final ArgumentCaptor<HttpGet> request = ArgumentCaptor.forClass(HttpGet.class);
+
+    itemOpenApiService.getItem(someAppId, someEnv, someCluster, someNamespace, someKey);
+
+    verify(httpClient, times(1)).execute(request.capture());
+
+    HttpGet get = request.getValue();
+
+    assertEquals(String
+        .format("%s/envs/%s/apps/%s/clusters/%s/namespaces/%s/items/%s", someBaseUrl, someEnv,
+            someAppId, someCluster, someNamespace, someKey), get.getURI().toString());
+  }
+
+  @Test
+  public void testGetNotExistedItem() throws Exception {
+    String someKey = "someKey";
+
+    when(statusLine.getStatusCode()).thenReturn(404);
+
+    assertNull(itemOpenApiService.getItem(someAppId, someEnv, someCluster, someNamespace, someKey));
   }
 
   @Test

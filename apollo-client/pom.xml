@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>com.ctrip.framework.apollo</groupId>
 		<artifactId>apollo</artifactId>
-		<version>1.1.0</version>
+		<version>1.4.0-SNAPSHOT</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 	<modelVersion>4.0.0</modelVersion>
@@ -45,6 +45,12 @@
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-api</artifactId>
 		</dependency>
+		<!-- yml processing -->
+		<dependency>
+			<groupId>org.yaml</groupId>
+			<artifactId>snakeyaml</artifactId>
+		</dependency>
+		<!-- end of yml processing -->
 		<!-- optional spring dependency -->
 		<dependency>
 			<groupId>org.springframework</groupId>
